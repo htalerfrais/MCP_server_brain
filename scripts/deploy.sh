@@ -15,6 +15,8 @@ done
 APP=/srv/brain/app
 UV="${UV:-$HOME/.local/bin/uv}"
 export UV_LINK_MODE=copy UV_PYTHON=/usr/bin/python3 UV_PROJECT_ENVIRONMENT="$APP/.venv"
+export PYTHONDONTWRITEBYTECODE=1
+umask 027
 
 cd "$APP"
 git fetch --quiet --prune origin
@@ -23,6 +25,8 @@ git clean -fdq -e .venv
 "$UV" sync --frozen --no-dev --quiet
 
 # Le code reste en lecture seule pour brain (groupe), invisible pour les autres.
+# Aucun cache Python dans les sources : brain ne doit rien pouvoir y écrire.
+find "$APP/src" -name __pycache__ -type d -prune -exec rm -rf {} +
 chmod -R g-w,o-rwx "$APP"
 
 "$APP/.venv/bin/python" - <<PY
