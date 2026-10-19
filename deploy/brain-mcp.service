@@ -1,0 +1,54 @@
+[Unit]
+Description=Brain MCP server (vault Markdown versionne)
+After=network-online.target tailscaled.service
+Wants=network-online.target
+
+[Service]
+Type=simple
+User=brain
+Group=brain
+WorkingDirectory=/srv/brain
+ExecStart=/srv/brain/app/.venv/bin/brain-mcp
+Restart=on-failure
+RestartSec=5
+
+Environment=HOME=/srv/brain
+Environment=PYTHONDONTWRITEBYTECODE=1
+Environment=BRAIN_VAULT=/srv/brain/vault
+Environment=BRAIN_POLICY=/srv/brain/app/policy.yaml
+Environment=BRAIN_PUBLIC_URL=https://hermes-vps.tail1afc26.ts.net
+Environment=FASTMCP_HOME=/srv/brain/state/fastmcp
+Environment="GIT_SSH_COMMAND=ssh -F /srv/brain/.ssh/config"
+LoadCredential=github_oauth:/etc/brain/github_oauth
+
+# Durcissement
+UMask=0027
+NoNewPrivileges=yes
+ProtectSystem=strict
+ProtectHome=yes
+ReadWritePaths=/srv/brain/vault /srv/brain/state
+ReadOnlyPaths=/srv/brain/app /srv/brain/.ssh
+PrivateTmp=yes
+PrivateDevices=yes
+ProtectKernelTunables=yes
+ProtectKernelModules=yes
+ProtectKernelLogs=yes
+ProtectControlGroups=yes
+ProtectClock=yes
+ProtectHostname=yes
+ProtectProc=invisible
+RestrictNamespaces=yes
+RestrictRealtime=yes
+RestrictSUIDSGID=yes
+LockPersonality=yes
+CapabilityBoundingSet=
+AmbientCapabilities=
+SystemCallArchitectures=native
+SystemCallFilter=@system-service
+SystemCallFilter=~@privileged @resources
+RestrictAddressFamilies=AF_UNIX AF_INET AF_INET6
+MemoryMax=512M
+TasksMax=128
+
+[Install]
+WantedBy=multi-user.target
