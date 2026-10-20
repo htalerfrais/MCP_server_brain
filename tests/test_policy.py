@@ -43,8 +43,21 @@ clients:
     "clients:\n  x: {auth: github, read: [], write: []}",
     "clients:\n  x: {auth: github, github_ids: [1], read: ['../etc'], write: []}",
     "clients:\n  x: {auth: github, github_ids: [1], read: [], write: [], extra: 1}",
+    "clients:\n  x: {auth: github, github_ids: [1], role: curator, write: ['**']}",
+    "clients:\n  x: {auth: github, github_ids: [1], role: boss}",
     "clients:\n  Bad_Name: {auth: github, github_ids: [1], read: [], write: []}",
 ])
 def test_invalid_policies(tmp_path, bad):
     with pytest.raises(PolicyError):
         Policy.load(write_policy(tmp_path, bad))
+
+
+def test_curator_has_everything(tmp_path):
+    policy = Policy.load(write_policy(tmp_path, """
+clients:
+  owner: {auth: github, github_ids: [42], role: curator}
+  bot: {auth: github, github_ids: [43], write: ["00-inbox/**"]}
+"""))
+    owner, bot = policy.by_github_id("42"), policy.by_github_id("43")
+    assert owner.is_curator and owner.can_write("any/where.md")
+    assert not bot.is_curator and bot.role == "contributor"

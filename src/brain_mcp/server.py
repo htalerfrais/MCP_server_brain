@@ -29,7 +29,9 @@ INSTRUCTIONS = """\
 Base de connaissance personnelle (vault Markdown, compatible Obsidian, versionné dans git).
 Structure : 00-inbox (captures à trier), 10-projects, 20-areas, 30-resources, 40-archives.
 Chaque dossier a un README.md qui décrit son usage. Commencer par whoami pour connaître ses droits.
-Les notes ont un en-tête YAML (title, created, tags, source). Pas de suppression : archiver avec move_note.
+Les notes ont un en-tête YAML (title, created, tags, source). Deux rôles : les curateurs peuvent aussi
+restructurer (move_folder, delete_note vers une corbeille, revert_commit) ; les contributeurs écrivent
+seulement dans leurs chemins. Pour archiver, utiliser move_note.
 """
 
 NotePath = Annotated[str, Field(description="Chemin relatif au vault, par exemple 10-projects/demo/plan.md")]
@@ -69,6 +71,11 @@ def build_server(name: str, auth: AuthProvider, vault: Vault, policy: Policy) ->
     def list_notes(folder: Annotated[str, Field(description="Dossier de départ, vide pour tout le vault")] = "") -> list[str]:
         """Liste les notes Markdown lisibles, récursivement depuis un dossier."""
         return guarded(vault.list_notes, caller(), folder)
+
+    @mcp.tool(annotations={"readOnlyHint": True})
+    def tree() -> dict[str, int]:
+        """Arborescence lisible : nombre de notes par dossier."""
+        return guarded(vault.tree, caller())
 
     @mcp.tool(annotations={"readOnlyHint": True})
     def read_note(path: NotePath) -> str:
@@ -113,6 +120,21 @@ def build_server(name: str, auth: AuthProvider, vault: Vault, policy: Policy) ->
     async def move_note(source: NotePath, destination: NotePath) -> dict:
         """Déplace ou renomme une note (par exemple vers 40-archives pour archiver)."""
         return await guarded_async(vault.move(caller(), source, destination))
+
+    @mcp.tool(annotations={"destructiveHint": False})
+    async def move_folder(source: NotePath, destination: NotePath) -> dict:
+        """Curateurs : déplace ou renomme un dossier entier en un seul commit."""
+        return await guarded_async(vault.move_folder(caller(), source, destination))
+
+    @mcp.tool(annotations={"destructiveHint": True})
+    async def delete_note(path: NotePath) -> dict:
+        """Curateurs : met une note à la corbeille cachée. Restauration possible avec revert_commit."""
+        return await guarded_async(vault.delete(caller(), path))
+
+    @mcp.tool(annotations={"destructiveHint": True})
+    async def revert_commit(commit: Annotated[str, Field(description="Identifiant du commit, tel que renvoyé par une écriture ou note_history")]) -> dict:
+        """Curateurs : annule un commit par un nouveau commit (défait une erreur ou restaure une suppression)."""
+        return await guarded_async(vault.revert(caller(), commit))
 
     return mcp
 

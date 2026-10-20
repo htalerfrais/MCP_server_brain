@@ -7,6 +7,7 @@ import datetime as dt
 import json
 import logging
 import os
+import re
 import subprocess
 from dataclasses import dataclass
 from pathlib import Path, PurePosixPath
@@ -18,6 +19,8 @@ log = logging.getLogger(__name__)
 
 MAX_NOTE_BYTES = 1_000_000
 SKIP_DIRS = {".git", ".obsidian", ".trash"}
+TRASH = ".corbeille"
+_SHA = re.compile(r"^[0-9a-f]{7,40}$")
 
 
 class VaultError(Exception):
@@ -260,3 +263,78 @@ class Vault:
             src_abs.rename(dst_abs)
 
         return await self.commit(client, f"Déplacement de {src} vers {dst}", [src, dst], mutate)
+
+    # ---------- structure (curateurs) ----------
+
+    @staticmethod
+    def _check_curator(client: Client) -> None:
+        if not client.is_curator:
+            raise VaultError(f"réservé aux curateurs : {client.name} est contributeur")
+
+    def tree(self, client: Client) -> dict[str, int]:
+        """Nombre de notes lisibles par dossier, pour voir la structure d'un coup."""
+        counts: dict[str, int] = {}
+        for rel in self.list_notes(client):
+            folder = str(PurePosixPath(rel).parent)
+            counts[folder if folder != "." else "/"] = counts.get(folder if folder != "." else "/", 0) + 1
+        return dict(sorted(counts.items()))
+
+    async def move_folder(self, client: Client, source: str, destination: str) -> CommitResult:
+        self._check_curator(client)
+        src, dst = self.rel(source, folder=True), self.rel(destination, folder=True)
+        if not src or not dst:
+            raise VaultError("le dossier racine ne peut pas être déplacé")
+        if dst == src or dst.startswith(src + "/"):
+            raise VaultError("la destination ne peut pas être dans la source")
+        src_abs, dst_abs = self._abs(src), self._abs(dst)
+
+        def mutate():
+            if not src_abs.is_dir():
+                raise VaultError(f"dossier introuvable : {src}")
+            if dst_abs.exists():
+                raise VaultError(f"la destination existe déjà : {dst}")
+            dst_abs.parent.mkdir(parents=True, exist_ok=True)
+            src_abs.rename(dst_abs)
+
+        return await self.commit(client, f"Déplacement du dossier {src} vers {dst}", [src, dst], mutate)
+
+    async def delete(self, client: Client, path: str) -> CommitResult:
+        """Met la note à la corbeille (`.corbeille/`, cachée) ; elle reste dans git."""
+        self._check_curator(client)
+        rel = self.rel(path)
+        src_abs = self._abs(rel)
+        stamp = dt.datetime.now(dt.timezone.utc).strftime("%Y%m%d-%H%M%S")
+        trash_rel = f"{TRASH}/{rel}"
+
+        def mutate():
+            if not src_abs.is_file():
+                raise VaultError(f"note introuvable : {rel}")
+            dst_abs = self._abs(trash_rel)
+            if dst_abs.exists():
+                dst_abs = dst_abs.with_name(f"{dst_abs.stem}.{stamp}.md")
+            dst_abs.parent.mkdir(parents=True, exist_ok=True)
+            src_abs.rename(dst_abs)
+
+        return await self.commit(client, f"Suppression de {rel} (corbeille)", [rel, TRASH], mutate)
+
+    async def revert(self, client: Client, commit: str) -> CommitResult:
+        """Annule un commit du vault par un nouveau commit (restaure aussi une note supprimée)."""
+        self._check_curator(client)
+        sha = commit.strip().lower()
+        if not _SHA.match(sha):
+            raise VaultError("identifiant de commit invalide")
+
+        def mutate():
+            known = self._git("cat-file", "-t", sha, check=False)
+            if known.returncode != 0 or known.stdout.strip() != "commit":
+                raise VaultError(f"commit introuvable : {sha}")
+            if len(self._git("rev-list", "--parents", "-n1", sha).stdout.split()) > 2:
+                raise VaultError("un commit de fusion ne peut pas être annulé")
+            run = self._git("-c", "user.name=brain-mcp", "-c", "user.email=brain-mcp@localhost",
+                            "revert", "--no-commit", sha, check=False)
+            if run.returncode != 0:
+                self._git("revert", "--abort", check=False)
+                self._git("reset", "--hard", "--quiet", "HEAD", check=False)
+                raise VaultError("annulation impossible (conflit avec des changements plus récents)")
+
+        return await self.commit(client, f"Annulation du commit {sha[:10]}", ["."], mutate)

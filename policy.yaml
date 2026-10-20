@@ -3,8 +3,12 @@
 # Un client = une identité et ses droits sur les chemins du vault.
 #   auth: github  -> connexion OAuth GitHub, comptes identifiés par leur id numérique
 #   auth: token   -> jeton statique ; seule son empreinte SHA-256 est stockée ici
-# Motifs de chemins : "**" = tout, "00-inbox/**" = un dossier et son contenu.
-# Écrire implique lire. Aucune suppression n'existe : on archive avec move_note.
+# Deux rôles :
+#   role: curator      -> tout le vault, contenu et structure (move_folder, delete_note, revert_commit).
+#                         Pas de read/write : les droits sont complets.
+#   role: contributor  -> (défaut) seulement les chemins read / write listés.
+# Motifs de chemins : "**" = tout, "00-inbox/**" = un dossier et son contenu. Écrire implique lire.
+# Une suppression met la note dans .corbeille/ (cachée), le contenu reste dans git.
 #
 # Ajouter un client : `brain-token <nom>`, copier l'entrée ci-dessous, déployer.
 
@@ -13,12 +17,10 @@ clients:
     description: Hector, via OAuth GitHub (Claude sur le web, Claude Desktop)
     auth: github
     github_ids: [132341794]
-    read: ["**"]
-    write: ["**"]
+    role: curator
 
   admin-vps:
     description: Claude Code sur le VPS (compte hector), administration et documentation
     auth: token
     token_sha256: 7630b69c87cc8784ba1fee310b5230b12364fcffc7d07edfec8d3c96a9e83a0c
-    read: ["**"]
-    write: ["**"]
+    role: curator

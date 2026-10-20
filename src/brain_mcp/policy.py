@@ -1,5 +1,8 @@
 """Politique d'accès : qui peut lire et écrire quels chemins du vault.
 
+Deux rôles : `curator` (tout le vault, contenu et structure) et `contributor`
+(motifs `read` / `write` explicites, pas de changement de structure).
+
 Chaque client est décrit dans policy.yaml. Un client s'authentifie soit par
 OAuth GitHub (liste d'identifiants numériques), soit par jeton statique, dont
 seule l'empreinte SHA-256 est stockée.
@@ -18,7 +21,7 @@ import yaml
 
 _HEX64 = re.compile(r"^[0-9a-f]{64}$")
 _NAME = re.compile(r"^[a-z0-9][a-z0-9-]{0,40}$")
-_ALLOWED_KEYS = {"description", "auth", "github_ids", "token_sha256", "read", "write"}
+_ALLOWED_KEYS = {"description", "auth", "github_ids", "token_sha256", "read", "write", "role"}
 
 
 class PolicyError(ValueError):
@@ -65,6 +68,11 @@ class Client:
     description: str = ""
     token_sha256: str | None = None
     github_ids: frozenset[str] = frozenset()
+    role: str = "contributor"
+
+    @property
+    def is_curator(self) -> bool:
+        return self.role == "curator"
 
     def can_read(self, path: str) -> bool:
         return matches(self.read, path) or matches(self.write, path)
@@ -76,6 +84,7 @@ class Client:
         return {
             "client": self.name,
             "auth": self.auth,
+            "role": self.role,
             "read": list(self.read),
             "write": list(self.write),
         }
@@ -130,8 +139,15 @@ def _parse_client(name: str, spec: object) -> Client:
         raise PolicyError(f"client {name} : clés inconnues {sorted(unknown)}")
 
     auth = spec.get("auth")
+    role = spec.get("role", "contributor")
+    if role not in ("curator", "contributor"):
+        raise PolicyError(f"client {name} : 'role' doit valoir 'curator' ou 'contributor'")
     read = tuple(spec.get("read") or ())
     write = tuple(spec.get("write") or ())
+    if role == "curator":
+        if read or write:
+            raise PolicyError(f"client {name} : un curateur a tous les droits, 'read' et 'write' sont interdits")
+        read = write = ("**",)
     for pattern in read + write:
         if not isinstance(pattern, str) or pattern.startswith("/") or ".." in pattern:
             raise PolicyError(f"client {name} : motif invalide {pattern!r}")
@@ -141,10 +157,10 @@ def _parse_client(name: str, spec: object) -> Client:
         if not ids:
             raise PolicyError(f"client {name} : 'github_ids' est requis avec auth: github")
         return Client(name, auth, read, write, spec.get("description", ""),
-                      github_ids=frozenset(str(i) for i in ids))
+                      github_ids=frozenset(str(i) for i in ids), role=role)
     if auth == "token":
         digest = str(spec.get("token_sha256") or "").lower()
         if not _HEX64.match(digest):
             raise PolicyError(f"client {name} : 'token_sha256' doit être une empreinte SHA-256")
-        return Client(name, auth, read, write, spec.get("description", ""), token_sha256=digest)
+        return Client(name, auth, read, write, spec.get("description", ""), token_sha256=digest, role=role)
     raise PolicyError(f"client {name} : 'auth' doit valoir 'github' ou 'token'")

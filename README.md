@@ -28,8 +28,10 @@ Hermes, outils locaux ──jeton statique────────────�
 - **Entrée publique** : OAuth via une OAuth App GitHub (proxy OAuth de FastMCP). Seuls les comptes
   GitHub listés dans `policy.yaml` sont acceptés, identifiés par leur id numérique.
 - **Entrée interne** : jetons statiques. Seule leur empreinte SHA-256 est stockée.
-- **Droits** : chaque client a des motifs de chemins en lecture et en écriture. Écrire implique lire.
-  Aucune suppression : on archive avec `move_note`.
+- **Rôles** : un *curateur* (`role: curator`) a tous les droits sur le vault, contenu et structure. Un
+  *contributeur* (défaut) n'a que les motifs `read` / `write` de son entrée. Écrire implique lire.
+- **Suppression** : réservée aux curateurs, elle déplace la note dans `.corbeille/` (cachée) ; tout reste
+  dans git et `revert_commit` restaure.
 
 ## Outils MCP
 
@@ -44,13 +46,17 @@ Hermes, outils locaux ──jeton statique────────────�
 | `update_note` | Remplacement du contenu |
 | `append_to_note` | Ajout en fin de note |
 | `move_note` | Déplacement ou archivage |
+| `tree` | Notes par dossier |
+| `move_folder` | Curateurs : déplace ou renomme un dossier, un seul commit |
+| `delete_note` | Curateurs : note vers la corbeille |
+| `revert_commit` | Curateurs : annule un commit (défait une erreur, restaure une suppression) |
 
 ## Exploitation
 
 Ajouter un client à jeton :
 
 ```bash
-.venv/bin/brain-token hermes      # affiche le jeton une fois, et l'entrée à copier
+.venv/bin/brain-token hermes      # (--curator pour un curateur) affiche le jeton une fois, et l'entrée à copier
 # coller l'entrée dans policy.yaml, adapter read/write, commit sur dev, fusion dans main
 scripts/deploy.sh                 # déploie main et redémarre le service
 ```

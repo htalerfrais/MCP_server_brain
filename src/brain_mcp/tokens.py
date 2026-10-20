@@ -14,6 +14,7 @@ from .policy import hash_token
 def main() -> None:
     parser = argparse.ArgumentParser(description="Crée un jeton pour un client du serveur MCP.")
     parser.add_argument("client", help="nom du client dans policy.yaml, par exemple hermes")
+    parser.add_argument("--curator", action="store_true", help="curateur : tous les droits, structure comprise")
     args = parser.parse_args()
 
     token = "brain_" + secrets.token_urlsafe(32)
@@ -24,8 +25,12 @@ def main() -> None:
     print(f"  {args.client}:")
     print("    auth: token")
     print(f"    token_sha256: {hash_token(token)}")
-    print('    read: ["**"]')
-    print("    write: []")
+    if args.curator:
+        print("    role: curator")
+    else:
+        print("    role: contributor")
+        print('    read: ["**"]')
+        print('    write: ["00-inbox/**"]')
 
 
 if __name__ == "__main__":
