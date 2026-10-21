@@ -61,3 +61,9 @@ clients:
     owner, bot = policy.by_github_id("42"), policy.by_github_id("43")
     assert owner.is_curator and owner.can_write("any/where.md")
     assert not bot.is_curator and bot.role == "contributor"
+
+
+def test_summary_points_to_conventions(tmp_path):
+    policy = Policy.load(write_policy(tmp_path, "clients:\n  o: {auth: github, github_ids: [1], role: curator}"))
+    summary = policy.by_github_id("1").summary()
+    assert summary["role"] == "curator" and summary["conventions"] == "README.md"

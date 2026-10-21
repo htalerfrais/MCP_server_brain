@@ -85,6 +85,7 @@ class Client:
             "client": self.name,
             "auth": self.auth,
             "role": self.role,
+            "conventions": "README.md",
             "read": list(self.read),
             "write": list(self.write),
         }

@@ -26,12 +26,10 @@ from .vault import Vault, VaultError
 log = logging.getLogger("brain_mcp")
 
 INSTRUCTIONS = """\
-Base de connaissance personnelle (vault Markdown, compatible Obsidian, versionné dans git).
-Structure : 00-inbox (captures à trier), 10-projects, 20-areas, 30-resources, 40-archives.
-Chaque dossier a un README.md qui décrit son usage. Commencer par whoami pour connaître ses droits.
-Les notes ont un en-tête YAML (title, created, tags, source). Deux rôles : les curateurs peuvent aussi
-restructurer (move_folder, delete_note vers une corbeille, revert_commit) ; les contributeurs écrivent
-seulement dans leurs chemins. Pour archiver, utiliser move_note.
+Base de connaissance personnelle (notes Markdown dans un vault git, compatible Obsidian).
+Commencer par whoami (votre rôle et vos droits), puis lire la note README.md à la racine : elle contient
+la structure, les conventions et le cycle de vie des notes. Elle prime sur tout autre usage supposé.
+Règles fixes : aucun secret dans les notes ; un droit refusé n'est pas à contourner, le signaler à l'utilisateur.
 """
 
 NotePath = Annotated[str, Field(description="Chemin relatif au vault, par exemple 10-projects/demo/plan.md")]
